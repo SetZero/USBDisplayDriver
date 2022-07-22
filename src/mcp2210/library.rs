@@ -7,24 +7,25 @@ use crate::MCP2210Error;
 
 static VENDOR_ID: u16 = 0x4D8;
 static DEVICE_ID: u16 = 0xDE;
+static DEFAULT_DEVICE_INDEX: u32 = 0;
 
 #[allow(dead_code)]
 pub enum GPIODirection {
-    IN,
-    OUT,
+    OUT = 0,
+    IN = 1,
 }
 
 #[allow(dead_code)]
 pub enum GPIOPins {
-    GP0,
-    GP1,
-    GP2,
-    GP3,
-    GP4,
-    GP5,
-    GP6,
-    GP7,
-    GP8,
+    GP0 = 0,
+    GP1 = 1,
+    GP2 = 2,
+    GP3 = 3,
+    GP4 = 4,
+    GP5 = 5,
+    GP6 = 6,
+    GP7 = 7,
+    GP8 = 8,
 }
 
 pub struct MCP2210Library {
@@ -36,7 +37,7 @@ impl MCP2210Library {
     pub fn new() -> Result<MCP2210Library, Box<dyn std::error::Error>> {
         unsafe {
             let lib = Library::new("mcp2210_dll_um_x64")?;
-            let handle = MCP2210Library::connect(lib.borrow(), 1)?;
+            let handle = MCP2210Library::connect(lib.borrow(), DEFAULT_DEVICE_INDEX)?;
             let res = MCP2210Library { lib, handle };
             Ok(res)
         }
@@ -128,14 +129,16 @@ impl MCP2210Library {
         Err(MCP2210Library::get_error_code(res_code))
     }
 
-    pub fn set_gpio_pin(&self, _pin: GPIOPins, direction: GPIODirection) -> Result<(), MCP2210Error> {
+    pub fn set_gpio_pin(&self, pin: GPIOPins, direction: GPIODirection) -> Result<(), MCP2210Error> {
         unsafe {
             let directions = self.get_gpio_pin_directions()?;
             println!("Directions: {directions}");
             let set_gpio_direction: libloading::Symbol<unsafe extern fn(*mut c_void, u32) -> i32> = self.lib.get(b"Mcp2210_SetGpioPinDir")?;
             match direction {
-                GPIODirection::IN => set_gpio_direction(self.handle, 1),
-                GPIODirection::OUT => set_gpio_direction(self.handle, 0),
+                GPIODirection::IN =>
+                    set_gpio_direction(self.handle, directions & !(1 << pin as u32)),
+                GPIODirection::OUT =>
+                    set_gpio_direction(self.handle, directions | (1 << pin as u32))
             };
         }
         Ok(())

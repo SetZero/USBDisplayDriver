@@ -10,7 +10,7 @@ mod mcp2210 {
 
 fn main() {
     let mcp2210 = MCP2210Library::new().unwrap_or_else(|err| {
-        eprintln!("Problem parsing arguments: {}", err);
+        eprintln!("Error parsing arguments: {}", err);
         process::exit(1);
     });
 
@@ -22,5 +22,10 @@ fn main() {
         }
     }
 
-    mcp2210.set_gpio_pin(GPIOPins::GP1, GPIODirection::IN).expect("Error while setting GPIO pin");
+    mcp2210.set_gpio_pin(GPIOPins::GP1, GPIODirection::OUT)
+        .expect("Error while setting GPIO pin");
+    mcp2210.set_gpio_pin(GPIOPins::GP2, GPIODirection::OUT)
+        .expect("Error while setting GPIO pin");
+    mcp2210.set_gpio_pin(GPIOPins::GP3, GPIODirection::OUT)
+        .expect("Error while setting GPIO pin");
 }
