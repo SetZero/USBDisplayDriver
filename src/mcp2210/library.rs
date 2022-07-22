@@ -1,28 +1,57 @@
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::ffi::c_void;
 
 use libloading::Library;
+use num_derive::FromPrimitive;
+use num;
 
 use crate::MCP2210Error;
 
 static VENDOR_ID: u16 = 0x4D8;
 static DEVICE_ID: u16 = 0xDE;
 static DEFAULT_DEVICE_INDEX: u32 = 0;
+const GPIO_PINS: usize = 9;
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
 pub enum GPIODirection {
-    OUT = 0,
-    IN = 1,
+    Out = 0,
+    In = 1,
 }
 
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
 pub enum GPIOPinValue {
-    OFF = 0,
-    ON = 1,
+    Off = 0,
+    On = 1,
 }
 
 #[allow(dead_code)]
-#[derive(Clone,Copy)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
+pub enum GPIOWakeUp {
+    Disabled = 0,
+    Enabled = 1,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
+pub enum InterruptCountingMode {
+    None = 0,
+    FallingEdges = 1,
+    RisingEdges = 2,
+    LowPulse = 3,
+    HighPulse = 4,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
+pub enum BusReleaseOption {
+    Enabled = 0,
+    Disabled = 1,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive)]
 pub enum GPIOPins {
     GP0 = 0,
     GP1 = 1,
@@ -33,6 +62,35 @@ pub enum GPIOPins {
     GP6 = 6,
     GP7 = 7,
     GP8 = 8,
+}
+
+#[allow(dead_code)]
+pub enum MCP2210MemorySource {
+    Volatile = 0,
+    NonVolatile = 1,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
+pub enum MCP2210PinDesignation {
+    GPIO = 0,
+    CS = 1,
+    FN = 2,
+}
+
+#[derive(Debug)]
+struct MCP2210GPIOInfo {
+    designation: MCP2210PinDesignation,
+    output: GPIOPinValue,
+    direction: GPIODirection,
+}
+
+#[derive(Debug)]
+pub struct MCP2210Config {
+    gpio_info: HashMap<GPIOPins, MCP2210GPIOInfo>,
+    wake_up: GPIOWakeUp,
+    interrupt_counting: InterruptCountingMode,
+    bus_release: BusReleaseOption,
 }
 
 pub struct MCP2210Library {
@@ -146,16 +204,16 @@ impl MCP2210Library {
         }
 
         match direction {
-            GPIODirection::IN =>
+            GPIODirection::In =>
                 unsafe { set_gpio_direction(self.handle, directions & !(1 << pin as u32)) },
-            GPIODirection::OUT =>
+            GPIODirection::Out =>
                 unsafe { set_gpio_direction(self.handle, directions | (1 << pin as u32)) }
         };
         Ok(())
     }
 
     pub fn get_gpio_pin_value(&self, pin: &GPIOPins) -> Result<GPIOPinValue, MCP2210Error> {
-        let  result: &mut u32 = &mut 0;
+        let result: &mut u32 = &mut 0;
         let return_value: i32;
         unsafe {
             let gpio_pin_value: libloading::Symbol<unsafe extern fn(*mut c_void, &mut u32) -> i32> = self.lib.get(b"Mcp2210_GetGpioPinVal")?;
@@ -168,15 +226,15 @@ impl MCP2210Library {
         let val = *result & (1 << *pin as u32);
 
         Ok(match val {
-            0 => GPIOPinValue::OFF,
-            _ => GPIOPinValue::ON
+            0 => GPIOPinValue::Off,
+            _ => GPIOPinValue::On
         })
     }
 
     pub fn set_gpio_pin_value(&self, pin: GPIOPins, pin_value: GPIOPinValue) -> Result<(), MCP2210Error> {
         let value = self.get_gpio_pin_value(pin.borrow())?;
         let set_gpio_value: libloading::Symbol<unsafe extern fn(*mut c_void, u32, &mut u32) -> i32>;
-        let  new_pin_values: &mut u32 = &mut 0;
+        let new_pin_values: &mut u32 = &mut 0;
 
         println!("Value: {:?}", value);
         unsafe {
@@ -184,13 +242,51 @@ impl MCP2210Library {
         }
 
         let result = match pin_value {
-            GPIOPinValue::OFF =>
+            GPIOPinValue::Off =>
                 unsafe { set_gpio_value(self.handle, value as u32 & !(1 << pin as u32), new_pin_values) },
-            GPIOPinValue::ON =>
+            GPIOPinValue::On =>
                 unsafe { set_gpio_value(self.handle, value as u32 | (1 << pin as u32), new_pin_values) }
         };
 
         println!("Result: {result} {new_pin_values} {}", value as u32 | (1 << pin as u32));
         Ok(())
+    }
+
+    pub fn get_gpio_config(&self, from: MCP2210MemorySource) -> Result<MCP2210Config, MCP2210Error> {
+        let p_gpio_pin_des: [u8; GPIO_PINS] = Default::default();
+        let pdflt_gpio_output: &mut u32 = &mut 0;
+        let pdflt_gpio_dir: &mut u32 = &mut 0;
+        let prmt_wkup_en: &mut u8 = &mut 0;
+        let pint_pin_md: &mut u8 = &mut 0;
+        let pspi_bus_rel_en: &mut u8 = &mut 0;
+        let return_value: i32;
+
+        unsafe {
+            let get_gpio_config: libloading::Symbol<unsafe extern fn(*mut c_void, u8, [u8; 9], &mut u32, &mut u32, &mut u8, &mut u8, &mut u8) -> i32>;
+            get_gpio_config = self.lib.get(b"Mcp2210_GetGpioConfig")?;
+            return_value = get_gpio_config(self.handle, from as u8, p_gpio_pin_des, pdflt_gpio_output, pdflt_gpio_dir, prmt_wkup_en, pint_pin_md, pspi_bus_rel_en);
+        }
+
+        if return_value.is_negative() {
+            return Err(MCP2210Library::get_error_code(return_value));
+        }
+
+        let mut map = HashMap::new();
+        for i in 0..GPIO_PINS {
+            let designation = num::FromPrimitive::from_u8(p_gpio_pin_des[i]).unwrap();
+            let output = num::FromPrimitive::from_u32((*pdflt_gpio_output >> i) & 1).unwrap();
+            let direction = num::FromPrimitive::from_u32((*pdflt_gpio_dir >> i) & 1).unwrap();
+
+            map.insert(num::FromPrimitive::from_usize(i).unwrap(), MCP2210GPIOInfo {
+                designation,
+                output,
+                direction
+            });
+        };
+        let wake_up = num::FromPrimitive::from_u8(*prmt_wkup_en ).unwrap();
+        let interrupt_counting = num::FromPrimitive::from_u8(*pint_pin_md ).unwrap();
+        let bus_release = num::FromPrimitive::from_u8(*pspi_bus_rel_en).unwrap();
+
+        Ok(MCP2210Config { gpio_info: map, wake_up, interrupt_counting, bus_release })
     }
 }

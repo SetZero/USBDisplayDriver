@@ -98,7 +98,7 @@ extern "C"{
 #define MCP2210_NVRAM_NO_PROTECTION             0x00
 #define MCP2210_NVRAM_PROTECTED                 0x40
 #define MCP2210_NVRAM_LOCKED                    0x80
-#define MCP2210_NVRAM_PASSWD_CHANGE             0xA5
+#define MCP2210_NVRAM_PASSWD_CHANGE   f          0xA5
 
 /* MCP2210 UM DLL API definition */
 MCP2210_DLL_UM_API int __stdcall Mcp2210_GetLibraryVersion(wchar_t *version);

@@ -1,7 +1,7 @@
 use std::process;
 
 use crate::mcp2210::errors::MCP2210Error;
-use crate::mcp2210::library::{GPIODirection, GPIOPins, GPIOPinValue, MCP2210Library};
+use crate::mcp2210::library::{GPIODirection, GPIOPins, GPIOPinValue, MCP2210Library, MCP2210MemorySource};
 
 mod mcp2210 {
     pub mod errors;
@@ -22,12 +22,15 @@ fn main() {
         }
     }
 
-    mcp2210.set_gpio_pin_directions(GPIOPins::GP1, GPIODirection::OUT)
+    mcp2210.set_gpio_pin_directions(GPIOPins::GP1, GPIODirection::In)
         .expect("Error while setting GPIO pin");
-    mcp2210.set_gpio_pin_directions(GPIOPins::GP2, GPIODirection::OUT)
+    mcp2210.set_gpio_pin_directions(GPIOPins::GP2, GPIODirection::In)
         .expect("Error while setting GPIO pin");
-    mcp2210.set_gpio_pin_directions(GPIOPins::GP3, GPIODirection::OUT)
+    mcp2210.set_gpio_pin_directions(GPIOPins::GP3, GPIODirection::In)
         .expect("Error while setting GPIO pin");
 
-    mcp2210.set_gpio_pin_value(GPIOPins::GP1, GPIOPinValue::ON).expect("Failed to set PIN value")
+    //mcp2210.set_gpio_pin_value(GPIOPins::GP1, GPIOPinValue::On).expect("Failed to set PIN value");
+    let res = mcp2210.get_gpio_config(MCP2210MemorySource::Volatile).expect("Failed to load device config");
+
+    println!("{:#?}", res);
 }
