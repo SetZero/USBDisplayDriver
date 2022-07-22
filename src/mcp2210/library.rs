@@ -15,7 +15,14 @@ pub enum GPIODirection {
     IN = 1,
 }
 
+#[derive(Debug,Clone,Copy)]
+pub enum GPIOPinValue {
+    OFF = 0,
+    ON = 1,
+}
+
 #[allow(dead_code)]
+#[derive(Clone,Copy)]
 pub enum GPIOPins {
     GP0 = 0,
     GP1 = 1,
@@ -129,18 +136,61 @@ impl MCP2210Library {
         Err(MCP2210Library::get_error_code(res_code))
     }
 
-    pub fn set_gpio_pin(&self, pin: GPIOPins, direction: GPIODirection) -> Result<(), MCP2210Error> {
+    pub fn set_gpio_pin_directions(&self, pin: GPIOPins, direction: GPIODirection) -> Result<(), MCP2210Error> {
+        let directions = self.get_gpio_pin_directions()?;
+        let set_gpio_direction: libloading::Symbol<unsafe extern fn(*mut c_void, u32) -> i32>;
+
+        println!("Directions: {directions}");
         unsafe {
-            let directions = self.get_gpio_pin_directions()?;
-            println!("Directions: {directions}");
-            let set_gpio_direction: libloading::Symbol<unsafe extern fn(*mut c_void, u32) -> i32> = self.lib.get(b"Mcp2210_SetGpioPinDir")?;
-            match direction {
-                GPIODirection::IN =>
-                    set_gpio_direction(self.handle, directions & !(1 << pin as u32)),
-                GPIODirection::OUT =>
-                    set_gpio_direction(self.handle, directions | (1 << pin as u32))
-            };
+            set_gpio_direction = self.lib.get(b"Mcp2210_SetGpioPinDir")?;
         }
+
+        match direction {
+            GPIODirection::IN =>
+                unsafe { set_gpio_direction(self.handle, directions & !(1 << pin as u32)) },
+            GPIODirection::OUT =>
+                unsafe { set_gpio_direction(self.handle, directions | (1 << pin as u32)) }
+        };
+        Ok(())
+    }
+
+    pub fn get_gpio_pin_value(&self, pin: &GPIOPins) -> Result<GPIOPinValue, MCP2210Error> {
+        let  result: &mut u32 = &mut 0;
+        let return_value: i32;
+        unsafe {
+            let gpio_pin_value: libloading::Symbol<unsafe extern fn(*mut c_void, &mut u32) -> i32> = self.lib.get(b"Mcp2210_GetGpioPinVal")?;
+            return_value = gpio_pin_value(self.handle, result);
+        }
+        if return_value.is_negative() {
+            return Err(MCP2210Library::get_error_code(return_value));
+        }
+
+        let val = *result & (1 << *pin as u32);
+
+        Ok(match val {
+            0 => GPIOPinValue::OFF,
+            _ => GPIOPinValue::ON
+        })
+    }
+
+    pub fn set_gpio_pin_value(&self, pin: GPIOPins, pin_value: GPIOPinValue) -> Result<(), MCP2210Error> {
+        let value = self.get_gpio_pin_value(pin.borrow())?;
+        let set_gpio_value: libloading::Symbol<unsafe extern fn(*mut c_void, u32, &mut u32) -> i32>;
+        let  new_pin_values: &mut u32 = &mut 0;
+
+        println!("Value: {:?}", value);
+        unsafe {
+            set_gpio_value = self.lib.get(b"Mcp2210_SetGpioPinVal")?;
+        }
+
+        let result = match pin_value {
+            GPIOPinValue::OFF =>
+                unsafe { set_gpio_value(self.handle, value as u32 & !(1 << pin as u32), new_pin_values) },
+            GPIOPinValue::ON =>
+                unsafe { set_gpio_value(self.handle, value as u32 | (1 << pin as u32), new_pin_values) }
+        };
+
+        println!("Result: {result} {new_pin_values} {}", value as u32 | (1 << pin as u32));
         Ok(())
     }
 }
