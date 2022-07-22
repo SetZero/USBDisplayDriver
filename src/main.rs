@@ -1,7 +1,7 @@
 use std::process;
 
 use crate::mcp2210::errors::MCP2210Error;
-use crate::mcp2210::library::MCP2210Library;
+use crate::mcp2210::library::{GPIODirection, GPIOPins, MCP2210Library};
 
 mod mcp2210 {
     pub mod errors;
@@ -21,4 +21,6 @@ fn main() {
             println!("Error: {}", e)
         }
     }
+
+    mcp2210.set_gpio_pin(GPIOPins::GP1, GPIODirection::IN).expect("Error while setting GPIO pin");
 }
